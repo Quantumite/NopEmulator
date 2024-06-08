@@ -88,6 +88,22 @@ Let's do one more example with this analysis and ignore that RCX register we kno
 
 Leaving all the other values the same, we once again receive our 'EFFECTIVE NOP' alert box. Ignoring the RCX register tells us that none of the other registers have been affected and if our analysis allows us to ignore that register, why not have the flexibility in your tool to do the same.
 
+### Full Analysis Example
+
+Finally, we'll do one more example with the Full Analysis option. This mode will look for all possible Nop Sleds within the byte sequence and due to the O(n^2) algorithm for every possible starting and ending position, this can take quite a long time for longer byte sequences. For this example, the byte sequence is only 0x10 bytes long. We'll keep the default values and registers too.
+
+![Full Analysis Dialog Box](images/full_analysis_dialog_box.png)
+
+Now we let the full analysis run. To minimize the number of images for this output, only one has been selected to demonstrate the output, but if you'd like to run this example yourself then load the `jmp_zero_nop.bin` file in the `simple_control_flow` folder and run `Full Analysis` yourself!
+
+![Full Analysis Result](images/full_analysis_result.png)
+
+We can see the comments have been added indicating the beginning and ending addresses for the possible Nop Sleds. There is a corresponding BEGIN comment with every END comment and both include the starting and ending addresses for clarity. While the script goes through every byte, not all instructions are valid when disassembled at every offset so it is expected to see gaps in the comments.
+
+For example, there is a Nop Sled in this example from 0x0 to 0xa, from 0x1 to 0xa, and from 0x4 to 0xa. In this case, starting at 0x2 and 0x3 do not result in a Nop Sled when stopping at 0xa.
+
+Lastly, for clarity, the script does not leave the bytes disassembled as this causes the comments to become quite verbose around instruction as many instructions would then assume the comments for bytes that started within their instruction that are also valid. If you'd like to disassemble the bytes at this point, simply press 'd' and let Ghidra handle that for you. After all, its your analysis, don't let a tool author's decision hinder your progress!
+
 ## Installation
 
 1. Simply clone the code base and include the path in Ghidra's Bundle Manager, which can be accessed in the Script Manager window.
