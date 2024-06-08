@@ -110,6 +110,10 @@ Lastly, for clarity, the script does not leave the bytes disassembled as this ca
 
 ![Installation](images/installation.jpg)
 
+### Requirements
+
+- This script runs in the Ghidra Reverse Engineering tool available [here](https://www.ghidra-sre.org)
+
 ## License
 
 NopEmulator is free, open source, and released under the MIT License.
