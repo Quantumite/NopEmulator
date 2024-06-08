@@ -60,6 +60,34 @@ Once again, for this example, we'll leave it with the default values (0) and cli
 
 Here we can see that the NopEmulator script correctly determined the byte sequence is in fact a Nop Sled!
 
+### Start Address to End Address Example
+
+Let's do another example with a new byte sequence and demonstrate the usage of starting and ending addresses within NopEmulator. Execute the script and select the "Start Address to End Address" option from the drop-down menu.
+
+![Start Address to End Address Dialog Box](images/start_addr_end_addr_dialog_box.png)
+
+Click 'Ok' to continue. We will keep the defaults again for now; click 'No' for ignoring registers and setting values. The script will now present you with a dialog box to enter the starting and ending addresses. These addresses can be seen on the left side of the bytes in the Listing window.
+
+![Start Address to End Address Enter Addresses](images/start_addr_end_addr_enter_addresses.png)
+
+The addresses have been circled in red for clarity. Enter your start address and click 'Ok'. Repeat again for your ending address. At first, we'll choose 0 and 1a. This is functionally equivalent to the beginning to end analysis from before, but we'll demonstrate what may happen when different addresses are selected afterwards.
+
+![Start Address to End Address First Result](images/start_addr_end_addr_first_result.png)
+
+Here we can correctly see that NopEmulator was able to determine that this byte sequence is a Nop Sled. Additionally, the disassembly changed from the initial analysis. NopEmulator realized that the instructions couldn't be executed successfully as they were disassembled initially and stepped past the bad 0xFF byte and re-disassembled the instructions to continue going. This gives a clearer picture of what was actually emulated and corrects minor attempts at obfuscation!
+
+Let's see what happens if we skip the first intruction next, we'll select 4 as the starting address and 1a as the ending address.
+
+![Start Address to End Address Second Result](images/start_addr_end_addr_second_result.png)
+
+Unfortunately, once we changed the starting address the byte sequence was no longer a Nop Sled. Not only does the alert box tell us, but the log below also shows the RCX value was not 0 like it was initially. In addition, the disassembly still looks the same, as the emulator did not take the first jump at the JZ instruction at address 0x8 because the SUB and ADD instruction together are what set the zero flag (ZF) to trigger that jump.
+
+Let's do one more example with this analysis and ignore that RCX register we know will cause a problem. To do this, we will select 'Yes' when asked to ignore a register. When ignoring registers, all the defaults are thrown away and must be included again if you want to use them. The value to enter into the ignore register to include the defaults will be: `"ZF;PF;CF;AF;SF;DF;OF;RIP;RCX"`. The value must include the quote characters and the semicolon separator as is required by Ghidra's argument parsing routines.
+
+![Start Address to End Address Ignore RCX](images/start_addr_end_addr_ignore_rcx.png)
+
+Leaving all the other values the same, we once again receive our 'EFFECTIVE NOP' alert box. Ignoring the RCX register tells us that none of the other registers have been affected and if our analysis allows us to ignore that register, why not have the flexibility in your tool to do the same.
+
 ## Installation
 
 1. Simply clone the code base and include the path in Ghidra's Bundle Manager, which can be accessed in the Script Manager window.
