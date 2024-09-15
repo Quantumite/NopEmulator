@@ -90,7 +90,9 @@ Leaving all the other values the same, we once again receive our 'EFFECTIVE NOP'
 
 ### Full Analysis Example
 
-Finally, we'll do one more example with the Full Analysis option. This mode will look for all possible Nop Sleds within the byte sequence and due to the O(n^2) algorithm for every possible starting and ending position, this can take quite a long time for longer byte sequences. For this example, the byte sequence is only 0x10 bytes long. We'll keep the default values and registers too.
+Finally, we'll do one more example with the Full Analysis option. This mode will look for all possible Nop Sleds within the byte sequence and due to the O(n^2) algorithm for every possible starting and end-of-instruction position, this can take quite a long time for longer byte sequences. The full analysis calculates the end of the instructions and determines if part of the instruction is included in the here-to-there values. If the end value is part of an instruction, the end values is adjusted to include the full instruction. This increases the reliability of the NOP detection and decreases the number of ending addresses to test for the full analysis.
+
+For this example, the byte sequence is only 0x10 bytes long. We'll keep the default values and registers too.
 
 ![Full Analysis Dialog Box](images/full_analysis_dialog_box.png)
 

@@ -1,3 +1,13 @@
 # Ignore venv
 .venv/
 venv/
+
+# Ignore .bin files
+!nop_with_conditionals/
+!nop_with_loops/
+!simple/
+!simple_control_flow/
+!simple_math/
+!third-party/
+!utility/
+*.bin

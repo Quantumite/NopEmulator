@@ -14,19 +14,112 @@
  * */
 
 import ghidra.app.cmd.disassemble.DisassembleCommand;
+import ghidra.app.emulator.Emulator;
+import ghidra.app.emulator.EmulatorConfiguration;
 import ghidra.app.emulator.EmulatorHelper;
 import ghidra.app.script.GhidraScript;
+import ghidra.pcode.emulate.InstructionDecodeException;
+import ghidra.pcode.error.LowlevelError;
+import ghidra.pcode.memstate.MemoryFaultHandler;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.lang.Register;
+import ghidra.program.model.lang.RegisterValue;
 import ghidra.program.model.listing.Instruction;
+import ghidra.program.model.listing.Program;
 import ghidra.program.model.listing.ProgramContext;
 import ghidra.util.exception.CancelledException;
+import ghidra.util.task.TaskMonitor;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.math.BigInteger;
+
+final class NopEmulatorHelper extends EmulatorHelper {
+
+	public String NopLastError = null;
+	private final Emulator NopEmulator = getEmulator();
+	private final Program NopProgram = getProgram();
+	
+	//Created default constructor that users the same construction
+	// as the parent class because we only need to modify
+	// a few functions for our use case.
+	public NopEmulatorHelper(Program program) {
+		super(program);
+	}
+	
+	/**
+	 * Step execution one instruction which may consist of multiple
+	 * pcode operations.  No adjustment will be made to the context beyond the normal 
+	 * context flow behavior defined by the language.
+	 * Method will block until execution stops.
+	 * @return true if execution completes without error
+	 * @throws CancelledException if execution cancelled via monitor
+	 */
+	public synchronized boolean step(TaskMonitor monitor) throws CancelledException {
+		executeInstruction(true, monitor);
+		NopLastError = getLastError();
+		return NopLastError == null;
+	}
+	
+	private void setProcessorContext() {
+		// this assumes you have set the emulation address
+		//   the emu will have cleared the context for the new address
+		RegisterValue contextRegisterValue = NopEmulator.getContextRegisterValue();
+		if (contextRegisterValue != null) {
+			return;
+		}
+
+		Address executeAddress = NopEmulator.getExecuteAddress();
+		Instruction instructionAt = NopProgram.getListing().getInstructionAt(executeAddress);
+		if (instructionAt != null) {
+			RegisterValue disassemblyContext =
+				instructionAt.getRegisterValue(instructionAt.getBaseContextRegister());
+			NopEmulator.setContextRegisterValue(disassemblyContext);
+		}
+	}
+	
+	/**
+	 * Execute instruction at current address
+	 * @param stopAtBreakpoint if true and breakpoint hits at current execution address
+	 * execution will halt without executing instruction.
+	 * @throws CancelledException if execution was cancelled
+	 */
+	private void executeInstruction(boolean stopAtBreakpoint, TaskMonitor monitor)
+			throws CancelledException, LowlevelError, InstructionDecodeException {
+
+		NopLastError = null;
+		try {
+			if (NopEmulator.getLastExecuteAddress() == null) {
+				setProcessorContext();
+			}
+			NopEmulator.executeInstruction(stopAtBreakpoint, monitor);
+		}
+		catch (Throwable t) {
+			NopLastError = t.getMessage();
+			if (NopLastError == null) {
+				NopLastError = t.toString();
+			}
+			NopEmulator.setHalt(true); // force execution to stop
+			if (t instanceof CancelledException) {
+				throw (CancelledException) t;
+			}
+			
+			// Main changes for NopEmulator are here so the exceptions are passed up
+			// and not handled internal to the EmulatorHelper
+			if (t instanceof LowlevelError)
+			{
+				throw (LowlevelError) t;
+			}
+			if (t instanceof InstructionDecodeException)
+			{
+				throw (InstructionDecodeException) t;
+			}
+		}
+	}
+	
+}
 
 public class NopEmulator extends GhidraScript {
 	
@@ -110,7 +203,7 @@ public class NopEmulator extends GhidraScript {
 		//Get Program Context
 		ProgramContext pc = currentProgram.getProgramContext();
 		Instruction inst = getInstructionAt(startAddress);	
-		EmulatorHelper eh = new EmulatorHelper(currentProgram);
+		NopEmulatorHelper eh = new NopEmulatorHelper(currentProgram);
 		int result = 1;
 		
 		//Disassemble start to end with restricted set of addresses (AddressSet)
@@ -125,7 +218,23 @@ public class NopEmulator extends GhidraScript {
 		eh.getEmulator().setExecuteAddress(startAddress.getOffset());
 		
 		//Emulate instructions
-		while(eh.step(monitor)){
+		boolean bNopEmulatorKeepRunning = true;
+		while(bNopEmulatorKeepRunning){
+			try{
+				bNopEmulatorKeepRunning = eh.step(monitor);
+			}
+			catch(InstructionDecodeException ide)
+			{
+				bNopEmulatorKeepRunning = false;
+				result = 1; // NOT A NOP
+				return result;
+			}
+			catch(LowlevelError lle)
+			{
+				bNopEmulatorKeepRunning = false;
+				result = 1; // NOT A NOP
+				return result;
+			}
 			inst = currentProgram.getListing().getInstructionAt(eh.getEmulator().getLastExecuteAddress());
 			
 			//Handle issues with decoding instructions and minimal obfuscation
@@ -163,6 +272,11 @@ public class NopEmulator extends GhidraScript {
 				
 			}
 			System.out.println(inst);
+			if (inst.getMnemonicString().equalsIgnoreCase("HLT"))
+			{
+				result = 1;
+				return result;
+			}
 			
 			//Get all register values after executing instruction
 			Object[] resultObjectArray = inst.getResultObjects();
@@ -234,6 +348,60 @@ public class NopEmulator extends GhidraScript {
 		}
 		
 		return result;
+	}
+	
+	private Address updateEndAddressToIncludeInstruction(Address start, Address end) throws CancelledException
+	{
+		Instruction inst;
+		Address instEnd;
+		long retAddr = end.getOffset();
+		
+		//Disassemble start to end with restricted set of addresses (AddressSet)
+		DisassembleCommand cmd = new DisassembleCommand(start, new AddressSet(start, end), false);
+		cmd.applyTo(currentProgram, monitor);
+		
+		Address temp = start;
+		do
+		{
+			inst = getInstructionContaining(temp);
+			if(inst == null)
+			{
+				//Break out of while loop in order to skip to next instruction
+				break;
+			}
+			
+			instEnd = temp.add(inst.getLength()-1); //Get length but don't sent end at beginning of next instruction
+			
+			if(end.subtract(instEnd) < 0) //Instruction end is after end address, update j
+			{
+				retAddr += instEnd.subtract(end);
+				end = instEnd;
+				println("Instruction longer than here-to-there range. Expanding range to include full instruction.");
+				break;
+			}
+			temp = instEnd.add(1);
+		} while(end.subtract(instEnd) > 0 && temp.subtract(end) <= 0);
+		// While there are more instructions between start and end, keep checking if end
+		// doesn't include the full instruction based on the range given. Update end
+		// if necessary.
+		
+		if(inst == null)
+		{
+			//decompilation of the instruction failed, skip to next end address
+			retAddr = end.getOffset();
+		}
+		
+		//Clear listing after each analysis to not affect future iterations
+		try
+		{
+			clearListing(start, end);
+		}
+		catch(CancelledException ce)
+		{
+			throw (CancelledException) ce;
+		}
+		
+		return toAddr(retAddr);
 	}
 	
 	@Override
@@ -342,7 +510,8 @@ public class NopEmulator extends GhidraScript {
 			{
 				//Get start and end address
 				Address start = myGetAddress("Start");
-				Address end = myGetAddress("End");				
+				Address end = myGetAddress("End");	
+				end = updateEndAddressToIncludeInstruction(start, end);
 				result = runHereToThere(start, end);
 			}
 			catch(CancelledException ce)
@@ -357,9 +526,10 @@ public class NopEmulator extends GhidraScript {
 			{
 				//Compute start and end address
 				Address start = myGetAddress("Start");
-				long end = askLong("Length", "Enter the length: ");
-				Address endAddress = start.add(end);				
-				result = runHereToThere(start, endAddress);
+				long endOffset = askLong("Length", "Enter the length: ");
+				Address end = start.add(endOffset);
+				end = updateEndAddressToIncludeInstruction(start, end);
+				result = runHereToThere(start, end);
 			}
 			catch(CancelledException ce)
 			{
@@ -375,10 +545,13 @@ public class NopEmulator extends GhidraScript {
 			Address end = Address.NO_ADDRESS;
 			for(long i = currentProgram.getMinAddress().getOffset(); i <= currentProgram.getMaxAddress().getOffset(); i++)
 			{
-				for(long j = i+1; j <= currentProgram.getMaxAddress().getOffset(); j++)
+				for(long j = i; j <= currentProgram.getMaxAddress().getOffset(); j++)
 				{
 					start = toAddr(i);
 					end = toAddr(j);
+					end = updateEndAddressToIncludeInstruction(start, end);
+					j = end.getOffset();
+					
 					result = runHereToThere(start, end);
 					println("Finished "+start.toString()+" to "+end.toString()+".");
 					
@@ -388,7 +561,7 @@ public class NopEmulator extends GhidraScript {
 					//If the current byte array is an effective nop, add comments to the involved addresses
 					if(result == 0)
 					{
-						println("Effective NOP from "+i+" to "+j);
+						println("Effective NOP from "+Long.toHexString(i)+" to "+Long.toHexString(j));
 						AddComment(start, end);
 					}
 				}
