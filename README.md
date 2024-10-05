@@ -6,17 +6,18 @@
 
 The NopEmulator is a Ghidra Script developed for the purpose of emulation Intel x64 instructions to determine if a Nop Sled is present in the binary. This tool originated from prior research that only used the ability to execute or parse the code as the only heuristic for valid Nop Sleds being present. This tool takes it one step further to emulate the instructions and validate if the resulting execution context is truly a Nop Sled. The tool can be applied to reverse engineering, malware analysis, and even to detecting exploits in network traffic that use Nop Sleds to transfer execution.
 
-While using the tool, the analyst has the option to configure how the script operates based on analysis need. This includes modifying the registers being analyzed by ignoring unimportant ones or specific ones based on their analysis needs. The script can also run from start-to-end, address-to-addresd, address for a length of bytes, or full analysis. The full analysis does a full bruteforce pass of every possible start and end value looking for Nop Sleds hidden within the bytes. In addition, when found, a comment is added to the starting and ending addresses to make analysis easier.
+While using the tool, the analyst has the option to configure how the script operates based on analysis need. This includes modifying the registers being analyzed by ignoring unimportant ones or specific ones based on their analysis needs. The script can also run from start-to-end, address-to-addresd, address for a length of bytes, longest, or full analysis. The full analysis does a full bruteforce pass of every possible start and end value looking for Nop Sleds hidden within the bytes. In addition, when found, a comment is added to the starting and ending addresses to make analysis easier.
 
 This script does not just look for a sequence of 0x90 bytes within the code, although it will find those too, it actually emulates each instruction to determine if the code is __effectively__ a Nop Sled. Check the [Usage](#usage) section for more examples of how it works.
 
 ## Features
 
-- Four different types of analysis
+- Five different types of analysis
   1. Start to End
   2. Start Address to End Address
   3. Start Address with Length
-  4. Full analysis
+  4. Longest
+  5. Full analysis
 - Ignoring Registers
 - Setting initial values
 
@@ -31,6 +32,10 @@ During your analysis, you find a large sequence of bytes you want to analyze mor
 ### Start Address with Length
 
 Similar to the beginning and ending address option, potentially you just want to analyze the next X bytes from where you are. Great! Enter the starting address and the length you want to analyze and NopEmulator will emulate those instructions and give you your result as well. It's important to have flexibility in your analysis tools.
+
+### Longest
+
+Similar to Full Analysis below, this type of analysis looks at every length byte sequence in the sample and keeps track of the longest effective NOP Sled that's found. This is useful when looking for the best candidate for an effective NOP Sled being used. It also selects the earliest one; effective NOP Sleds of the same length located later on will not overwrite the earliest found effective NOP Sled.
 
 ### Full Analysis
 
@@ -127,6 +132,7 @@ NopEmulator is free, open source, and released under the MIT License.
 - Added start to end analysis
 - Added starting address to ending address analysis
 - Added starting address with length analysis
+- Added longest analysis
 - Added Full Analysis
 - Dialog boxes for easy configuration of script execution
 - Support for x64 Intel architecture

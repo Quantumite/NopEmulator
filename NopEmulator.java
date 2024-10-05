@@ -134,6 +134,7 @@ public class NopEmulator extends GhidraScript {
 	String analysisTypeBeginToEnd = "Beginning to End (Default)";
 	String analysisTypeHereToThere = "Start Address to End Address";
 	String analysisTypeAddressOffset = "Start Address and Length";
+	String analysisTypeLongest = "Longest";
 	String analysisTypeFull = "Full Analysis";
 	
 	//Wrapper around askAddress for start/end addresses
@@ -414,6 +415,7 @@ public class NopEmulator extends GhidraScript {
 		analysisTypes.add(analysisTypeBeginToEnd);
 		analysisTypes.add(analysisTypeHereToThere);
 		analysisTypes.add(analysisTypeAddressOffset);
+		analysisTypes.add(analysisTypeLongest);
 		analysisTypes.add(analysisTypeFull);
 		
 		//Set default (0) values for registers
@@ -536,6 +538,44 @@ public class NopEmulator extends GhidraScript {
 				ce.printStackTrace();
 			}
 			printResult(result);
+		}
+		else if(stringAnalysisSelection.equals(analysisTypeLongest))
+		{
+			Address start = Address.NO_ADDRESS;
+			Address end = Address.NO_ADDRESS;
+			Address startLongest = start;
+			Address endLongest = start;
+			for(long i = currentProgram.getMinAddress().getOffset(); i <= currentProgram.getMaxAddress().getOffset(); i++)
+			{
+				for(long j = i; j <= currentProgram.getMaxAddress().getOffset(); j++)
+				{
+					start = toAddr(i);
+					end = toAddr(j);
+					end = updateEndAddressToIncludeInstruction(start, end);
+					j = end.getOffset();
+					
+					result = runHereToThere(start, end);
+					
+					//If a NOP Sled is found, see if it's the longest
+					if(result == 0)
+					{
+						if(end.subtract(start) > endLongest.subtract(startLongest))
+						{
+							println("New Longest Effective NOP found: "+Long.toHexString(i)+", "+Long.toHexString(j));
+							startLongest = start;
+							endLongest = end;
+						}
+						
+					}
+					
+					//Clear listing after each analysis to not affect future iterations
+					clearListing(currentProgram.getMinAddress(), currentProgram.getMaxAddress());
+				}
+			}
+			
+			//Comment longest NOP Sled
+			println("Longest Effective NOP from "+startLongest.toString()+" to "+endLongest.toString());
+			AddComment(startLongest, endLongest);
 		}
 		else if(stringAnalysisSelection.equals(analysisTypeFull))
 		{
