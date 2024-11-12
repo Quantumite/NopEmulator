@@ -22,7 +22,10 @@ import ghidra.pcode.emulate.InstructionDecodeException;
 import ghidra.pcode.error.LowlevelError;
 import ghidra.pcode.memstate.MemoryFaultHandler;
 import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressRange;
 import ghidra.program.model.address.AddressSet;
+import ghidra.program.model.address.AddressSetView;
+import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.lang.Register;
 import ghidra.program.model.lang.RegisterValue;
 import ghidra.program.model.listing.Instruction;
@@ -47,6 +50,7 @@ final class NopEmulatorHelper extends EmulatorHelper {
 	// a few functions for our use case.
 	public NopEmulatorHelper(Program program) {
 		super(program);
+		this.enableMemoryWriteTracking(true);
 	}
 	
 	/**
@@ -198,13 +202,14 @@ public class NopEmulator extends GhidraScript {
 	}
 	
 	//run analysis from startAddress to endAddress
-	private int runHereToThere(Address startAddress, Address endAddress) throws CancelledException
+	private int runHereToThere(Address startAddress, Address endAddress, boolean bCheckWritable) throws CancelledException
 	{
 		
 		//Get Program Context
 		ProgramContext pc = currentProgram.getProgramContext();
 		Instruction inst = getInstructionAt(startAddress);	
 		NopEmulatorHelper eh = new NopEmulatorHelper(currentProgram);
+		AddressSetView asv = eh.getTrackedMemoryWriteSet();
 		int result = 1;
 		
 		//Disassemble start to end with restricted set of addresses (AddressSet)
@@ -226,6 +231,7 @@ public class NopEmulator extends GhidraScript {
 			}
 			catch(InstructionDecodeException ide)
 			{
+				System.out.println("here");
 				bNopEmulatorKeepRunning = false;
 				result = 1; // NOT A NOP
 				return result;
@@ -337,6 +343,20 @@ public class NopEmulator extends GhidraScript {
 			}
 			
 		}
+		
+		for(AddressRange as : asv)
+		{
+			if(as.getAddressSpace().getName().equals("ram"))
+			{
+				System.out.println(as);
+				if(bCheckWritable)
+				{
+					foundDiff = true;
+					break;
+				}
+			}			
+		}
+		
 		
 		//If we found a difference, return NOT_NOP, otherwise EFFECTIVE_NOP
 		if(foundDiff)
@@ -493,12 +513,14 @@ public class NopEmulator extends GhidraScript {
 			}
 		}
 		
+		boolean bCheckWriteLocations = askYesNo("Check Writable Locations", "Should writing to memory be considered a NOP?");
+				
 		if(stringAnalysisSelection.equals(analysisTypeBeginToEnd))
 		{
 			try
 			{
 				//beginning to end == min address to max address
-				result = runHereToThere(currentProgram.getMinAddress(), currentProgram.getMaxAddress());
+				result = runHereToThere(currentProgram.getMinAddress(), currentProgram.getMaxAddress(), !bCheckWriteLocations);
 			}
 			catch(CancelledException ce)
 			{
@@ -514,7 +536,7 @@ public class NopEmulator extends GhidraScript {
 				Address start = myGetAddress("Start");
 				Address end = myGetAddress("End");	
 				end = updateEndAddressToIncludeInstruction(start, end);
-				result = runHereToThere(start, end);
+				result = runHereToThere(start, end, !bCheckWriteLocations);
 			}
 			catch(CancelledException ce)
 			{
@@ -531,7 +553,7 @@ public class NopEmulator extends GhidraScript {
 				long endOffset = askLong("Length", "Enter the length: ");
 				Address end = start.add(endOffset);
 				end = updateEndAddressToIncludeInstruction(start, end);
-				result = runHereToThere(start, end);
+				result = runHereToThere(start, end, !bCheckWriteLocations);
 			}
 			catch(CancelledException ce)
 			{
@@ -554,7 +576,7 @@ public class NopEmulator extends GhidraScript {
 					end = updateEndAddressToIncludeInstruction(start, end);
 					j = end.getOffset();
 					
-					result = runHereToThere(start, end);
+					result = runHereToThere(start, end, !bCheckWriteLocations);
 					
 					//If a NOP Sled is found, see if it's the longest
 					if(result == 0)
@@ -592,7 +614,7 @@ public class NopEmulator extends GhidraScript {
 					end = updateEndAddressToIncludeInstruction(start, end);
 					j = end.getOffset();
 					
-					result = runHereToThere(start, end);
+					result = runHereToThere(start, end, !bCheckWriteLocations);
 					println("Finished "+start.toString()+" to "+end.toString()+".");
 					
 					//Clear listing after each analysis to not affect future iterations
