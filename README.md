@@ -20,6 +20,7 @@ This script does not just look for a sequence of 0x90 bytes within the code, alt
   5. Full analysis
 - Ignoring Registers
 - Setting initial values
+- Allowing/Disallowing Memory Writes to be a valid component of a NOP Sled
 
 ### Start to End
 
@@ -149,3 +150,4 @@ NopEmulator is free, open source, and released under the MIT License.
 - Dialog boxes for easy configuration of script execution
 - Support for x64 Intel architecture
 - Initial algorithm implementation as a Ghidra Script
+- Implemented Memory Write Tracker and toggle option for including result in NOP Sled determination
