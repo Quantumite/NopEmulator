@@ -111,6 +111,18 @@ For example, there is a Nop Sled in this example from 0x0 to 0xa, from 0x1 to 0x
 
 Lastly, for clarity, the script does not leave the bytes disassembled as this causes the comments to become quite verbose around instruction as many instructions would then assume the comments for bytes that started within their instruction that are also valid. If you'd like to disassemble the bytes at this point, simply press 'd' and let Ghidra handle that for you. After all, its your analysis, don't let a tool author's decision hinder your progress!
 
+## Headless Analysis
+- Basic Command
+  - Create a project in the local dir, `.`, named `Temp`
+  - After the analysis we will delete the project, `-deleteProject`
+  - We are importing the multibyte_nop.bin file
+    - Since the binary file does not have a default processor associated with it, we are using the default Intel 64-bit processor to read the binary file, `x86:LE:64:default`
+  - Run the NopEmulator script before analysis using `-preScript` and specifying the location of the script using `-scriptPath`
+
+```
+analyzeHeadless . Temp -deleteProject -import \Path\To\File\To\Analyze\multibyte_nop.bin -processor "x86:LE:64:default" -preScript NopEmulator.java -scriptPath \Path\To\Directory\With\Script
+```
+
 ## Installation
 
 1. Simply clone the code base and include the path in Ghidra's Bundle Manager, which can be accessed in the Script Manager window.
